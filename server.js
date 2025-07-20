@@ -7,12 +7,45 @@ const fs = require("fs");
 const connectDB = require("./config/db");
 const app = express();
 
+// ===== Firebase Admin SDK setup =====
+const admin = require("firebase-admin");
+
+const base64ServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+
+if (!base64ServiceAccount) {
+  console.error("❌ FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable байхгүй байна!");
+  process.exit(1); // Серверийг зогсооно
+}
+
+const serviceAccountPath = path.join(__dirname, "firebase-service-account.json");
+
+try {
+  // Base64-ыг декод хийж, JSON файлыг үүсгэнэ
+  fs.writeFileSync(
+    serviceAccountPath,
+    Buffer.from(base64ServiceAccount, "base64").toString("utf-8")
+  );
+  console.log("✅ Firebase service account файлыг амжилттай үүсгэлээ.");
+} catch (error) {
+  console.error("❌ Firebase service account файлыг үүсгэхэд алдаа гарлаа:", error.message);
+  process.exit(1);
+}
+
+const serviceAccount = require(serviceAccountPath);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+// ===============================
+
 // ✅ Security middleware
 app.use(
   helmet({
-    crossOriginResourcePolicy: false, // ⬅️ энэ нь зураг гадаад origin-д харагдахаар болгоно
+    crossOriginResourcePolicy: false, // Зураг гадаад origin-д харагдахаар болгоно
   })
 );
+
 // Root route — серверийн ажиллаж байгааг баталгаажуулахын тулд
 app.get("/", (req, res) => {
   res.send("✅ Backend сервер амжилттай ажиллаж байна!");
@@ -23,32 +56,46 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ✅ Global CORS тохиргоо
-app.use(cors({
-  origin: "http://localhost:3000", // React frontend origin
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: "http://localhost:3000", // React frontend origin
+    credentials: true,
+  })
+);
 
 // ✅ Static файл – uploads route (зургуудын хандалт)
-app.use("/uploads", (req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:3000");
-  res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
-}, express.static(path.join(__dirname, "uploads")));
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "http://localhost:3000");
+    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept"
+    );
+    next();
+  },
+  express.static(path.join(__dirname, "uploads"))
+);
 
 // ✅ Preflight request (OPTIONS) – /uploads/... замд хариу өгөх
 app.options("/uploads/*", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept"
+  );
   res.sendStatus(200);
 });
-
 
 // ✅ uploads/ хавтас үүсгэх болон default зургийг хуулж тавих
 const ensureDefaultProfileImage = () => {
   const uploadsDir = path.join(__dirname, "uploads");
-  const defaultImageSrc = path.join(__dirname, "../src/assets/default-profile.png"); // React asset байршил
+  const defaultImageSrc = path.join(
+    __dirname,
+    "../src/assets/default-profile.png"
+  ); // React asset байршил
   const defaultImageDest = path.join(uploadsDir, "default-profile.png");
 
   if (!fs.existsSync(uploadsDir)) {
@@ -64,7 +111,6 @@ const ensureDefaultProfileImage = () => {
     }
   }
 };
-
 
 // ✅ API Routes
 app.use("/api/lawyers", require("./routes/lawyerRoutes"));
@@ -85,7 +131,7 @@ app.use((err, req, res, next) => {
 
 // 🚀 Start server
 const PORT = process.env.PORT || 5050;
-ensureDefaultProfileImage(); // ⬅️ энэ мөрийг нэмэх хэрэгтэй
+ensureDefaultProfileImage(); // uploads хавтас ба default зураг шалгах
 
 connectDB().then(() => {
   app.listen(PORT, () => {
