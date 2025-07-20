@@ -13,6 +13,10 @@ app.use(
     crossOriginResourcePolicy: false, // ⬅️ энэ нь зураг гадаад origin-д харагдахаар болгоно
   })
 );
+// Root route — серверийн ажиллаж байгааг баталгаажуулахын тулд
+app.get("/", (req, res) => {
+  res.send("✅ Backend сервер амжилттай ажиллаж байна!");
+});
 
 // ✅ Body parser middleware
 app.use(express.json());
