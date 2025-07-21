@@ -14,14 +14,12 @@ const base64ServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
 if (!base64ServiceAccount) {
   console.error("❌ FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable байхгүй байна!");
-  process.exit(1); // Серверийг зогсооно
+  process.exit(1);
 }
 
 const decodedServiceAccount = Buffer.from(base64ServiceAccount, "base64").toString("utf8");
-
 const serviceAccount = JSON.parse(decodedServiceAccount);
 
-// Firebase Admin-ыг зөвхөн нэг удаа initialize хийх шалгалт
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -48,9 +46,22 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Global CORS тохиргоо
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://barrister-frontend.vercel.app",
+];
+
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: function (origin, callback) {
+      // Postman гэх мэт origin байхгүй нөхцөлд зөвшөөрөх
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `CORS policy: ${origin} origin-ыг зөвшөөрөхгүй байна.`;
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
@@ -59,7 +70,8 @@ app.use(
 app.use(
   "/uploads",
   (req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "http://localhost:3000");
+    // uploads-д ирэх хүсэлтэнд зөв origin-г header-д өгнө
+    res.header("Access-Control-Allow-Origin", allowedOrigins.join(", "));
     res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.header(
       "Access-Control-Allow-Headers",
@@ -71,7 +83,7 @@ app.use(
 );
 
 app.options("/uploads/*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigins.join(", "));
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
