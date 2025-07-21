@@ -17,53 +17,45 @@ if (!base64ServiceAccount) {
   process.exit(1); // Серверийг зогсооно
 }
 
-const serviceAccountPath = path.join(__dirname, "firebase-service-account.json");
+const decodedServiceAccount = Buffer.from(base64ServiceAccount, "base64").toString("utf8");
 
-try {
-  // Base64-ыг декод хийж, JSON файлыг үүсгэнэ
-  fs.writeFileSync(
-    serviceAccountPath,
-    Buffer.from(base64ServiceAccount, "base64").toString("utf-8")
-  );
-  console.log("✅ Firebase service account файлыг амжилттай үүсгэлээ.");
-} catch (error) {
-  console.error("❌ Firebase service account файлыг үүсгэхэд алдаа гарлаа:", error.message);
-  process.exit(1);
+const serviceAccount = JSON.parse(decodedServiceAccount);
+
+// Firebase Admin-ыг зөвхөн нэг удаа initialize хийх шалгалт
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  console.log("✅ Firebase Admin амжилттай initialize боллоо.");
 }
-
-const serviceAccount = require(serviceAccountPath);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
 
 // ===============================
 
 // ✅ Security middleware
 app.use(
   helmet({
-    crossOriginResourcePolicy: false, // Зураг гадаад origin-д харагдахаар болгоно
+    crossOriginResourcePolicy: false,
   })
 );
 
-// Root route — серверийн ажиллаж байгааг баталгаажуулахын тулд
+// Root route
 app.get("/", (req, res) => {
   res.send("✅ Backend сервер амжилттай ажиллаж байна!");
 });
 
-// ✅ Body parser middleware
+// Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Global CORS тохиргоо
+// Global CORS тохиргоо
 app.use(
   cors({
-    origin: "http://localhost:3000", // React frontend origin
+    origin: "http://localhost:3000",
     credentials: true,
   })
 );
 
-// ✅ Static файл – uploads route (зургуудын хандалт)
+// Static файл – uploads route
 app.use(
   "/uploads",
   (req, res, next) => {
@@ -78,7 +70,6 @@ app.use(
   express.static(path.join(__dirname, "uploads"))
 );
 
-// ✅ Preflight request (OPTIONS) – /uploads/... замд хариу өгөх
 app.options("/uploads/*", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "http://localhost:3000");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -89,13 +80,13 @@ app.options("/uploads/*", (req, res) => {
   res.sendStatus(200);
 });
 
-// ✅ uploads/ хавтас үүсгэх болон default зургийг хуулж тавих
+// uploads хавтас болон default зураг үүсгэх
 const ensureDefaultProfileImage = () => {
   const uploadsDir = path.join(__dirname, "uploads");
   const defaultImageSrc = path.join(
     __dirname,
     "../src/assets/default-profile.png"
-  ); // React asset байршил
+  );
   const defaultImageDest = path.join(uploadsDir, "default-profile.png");
 
   if (!fs.existsSync(uploadsDir)) {
@@ -112,7 +103,7 @@ const ensureDefaultProfileImage = () => {
   }
 };
 
-// ✅ API Routes
+// API Routes
 app.use("/api/lawyers", require("./routes/lawyerRoutes"));
 app.use("/api/news", require("./routes/newsRoutes"));
 app.use("/api/testimonials", require("./routes/testimonialRoutes"));
@@ -120,7 +111,7 @@ app.use("/api/home", require("./routes/homeRoutes"));
 app.use("/api/advice", require("./routes/adviceRoutes"));
 app.use("/api/contactSettings", require("./routes/contactSettings"));
 
-// ❗ Error handler
+// Error handler
 app.use((err, req, res, next) => {
   console.error("🚨 Серверийн алдаа:", err.stack);
   res.status(500).json({
@@ -129,9 +120,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 🚀 Start server
+// Start server
 const PORT = process.env.PORT || 5050;
-ensureDefaultProfileImage(); // uploads хавтас ба default зураг шалгах
+ensureDefaultProfileImage();
 
 connectDB().then(() => {
   app.listen(PORT, () => {

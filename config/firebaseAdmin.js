@@ -1,11 +1,18 @@
-// backend/config/firebaseAdmin.js
 const admin = require("firebase-admin");
-// firebaseAdmin.js
-const serviceAccount = require("./barrister-web-f4b8f-firebase-adminsdk-fbsvc-cc6e9fa14d.json");
 
+const base64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+if (!base64) {
+  console.error("❌ FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable байхгүй байна!");
+  process.exit(1);
+}
+
+const decoded = Buffer.from(base64, "base64").toString("utf8");
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(JSON.parse(decoded)),
+  });
+}
 
 module.exports = admin;
