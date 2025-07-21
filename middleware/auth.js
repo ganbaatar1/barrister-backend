@@ -1,7 +1,5 @@
-// 📁 backend/middleware/auth.js
-const admin = require("../config/firebaseAdmin");;
+const admin = require("../config/firebaseAdmin");
 
-// Firebase Admin SDK ашиглан token шалгах middleware
 const requireAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization || "";
@@ -20,9 +18,7 @@ const requireAuth = async (req, res, next) => {
     req.user = decodedToken;
     next();
   } catch (err) {
-    console.error("❌ Firebase token шалгах алдаа:");
-    console.error("   📛 Code:", err.code || "UNKNOWN");
-    console.error("   📜 Message:", err.message);
+    console.error("❌ Firebase token шалгах алдаа:", err.code || "UNKNOWN");
     return res.status(401).json({ error: "Хүчингүй эсвэл хугацаа дууссан токен" });
   }
 };

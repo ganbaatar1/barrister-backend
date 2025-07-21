@@ -16,7 +16,7 @@ const upload = multer({
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
     if (mimetype && extname) return cb(null, true);
-    cb(new Error("Only image and video files are allowed!"));
+    cb(new Error("Зөвхөн зураг болон видео файл зөвшөөрнө"));
   }
 });
 

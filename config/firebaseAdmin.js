@@ -1,18 +1,18 @@
 const admin = require("firebase-admin");
+const fs = require("fs");
 
-const base64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
-if (!base64) {
-  console.error("❌ FIREBASE_SERVICE_ACCOUNT_BASE64 environment variable байхгүй байна!");
-  process.exit(1);
+if (!serviceAccountBase64) {
+  throw new Error("FIREBASE_SERVICE_ACCOUNT_BASE64 орчин байхгүй байна.");
 }
 
-const decoded = Buffer.from(base64, "base64").toString("utf8");
+// Decode base64 string
+const serviceAccountJSON = Buffer.from(serviceAccountBase64, "base64").toString("utf8");
+const serviceAccount = JSON.parse(serviceAccountJSON);
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(JSON.parse(decoded)),
-  });
-}
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 module.exports = admin;
