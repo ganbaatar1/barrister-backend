@@ -1,4 +1,3 @@
-// config/firebaseAdmin.js
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
@@ -18,8 +17,11 @@ if (!fs.existsSync(jsonFilePath)) {
   console.log("✅ Firebase service account файлыг амжилттай үүсгэлээ.");
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(jsonFilePath),
-});
+// ИНДЭЭР initializeApp() дуудахаас өмнө шалга
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(jsonFilePath),
+  });
+}
 
 module.exports = admin;

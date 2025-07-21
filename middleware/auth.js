@@ -1,26 +1,28 @@
-const admin = require("../config/firebaseAdmin");
+const admin = require("firebase-admin");
 
-const requireAuth = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+// FIREBASE_SERVICE_ACCOUNT_BASE64 .env хувьсагчаас авна
+const base64ServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
-    if (!token) {
-      return res.status(401).json({ error: "Access token байхгүй" });
-    }
-
-    console.log("📥 Header authorization:", authHeader);
-    console.log("👉 Хүлээн авсан токен:", token);
-
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    console.log("✅ Firebase decoded token:", decodedToken);
-
-    req.user = decodedToken;
-    next();
-  } catch (err) {
-    console.error("❌ Firebase token шалгах алдаа:", err.code || "UNKNOWN");
-    return res.status(401).json({ error: "Хүчингүй эсвэл хугацаа дууссан токен" });
+if (!admin.apps.length) {
+  if (!base64ServiceAccount) {
+    throw new Error("❌ FIREBASE_SERVICE_ACCOUNT_BASE64 тохиргоо байхгүй байна!");
   }
-};
 
-module.exports = requireAuth;
+  try {
+    // base64 decode → JSON string → Object
+    const decoded = Buffer.from(base64ServiceAccount, "base64").toString("utf8");
+    const serviceAccount = JSON.parse(decoded);
+
+    // Firebase Admin SDK initialize
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+
+    console.log("✅ Firebase Admin SDK амжилттай initialize боллоо.");
+  } catch (error) {
+    console.error("❌ Firebase service account decode хийхэд алдаа гарлаа:", error.message);
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_BASE64 decode амжилтгүй.");
+  }
+}
+
+module.exports = admin;
