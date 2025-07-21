@@ -3,3 +3,4 @@ config/firebase-service-account.json
 config/barrister-web-f4b8f-firebase-adminsdk-fbsvc-cc6e9fa14d.json
 firebase-service-account.json
 service-account.base64.txt
+.env
