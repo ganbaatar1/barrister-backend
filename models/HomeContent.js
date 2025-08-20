@@ -1,12 +1,47 @@
-const mongoose = require("mongoose");
+const Home = require("../models/homeContent");
+const { uploadToCloudinary } = require("../utils/cloudinary");
 
-const HomeContentSchema = new mongoose.Schema({
-  about: { type: String, required: true },
-  mission: { type: String, required: true },
-  vision: { type: String, required: true },
-  principles: { type: String },
-  services: { type: String },
-  image: { type: String },
-});
+// GET /
+exports.getHome = async (req, res) => {
+  try {
+    const content = await Home.findOne();
+    res.json(content);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch home content", error });
+  }
+};
 
-module.exports = mongoose.model("HomeContent", HomeContentSchema);
+// PUT /
+exports.updateHome = async (req, res) => {
+  try {
+    const { banners, welcomeText } = req.body;
+
+    const home = await Home.findOne();
+    if (home) {
+      home.banners = banners;
+      home.welcomeText = welcomeText;
+      await home.save();
+    } else {
+      await Home.create({ banners, welcomeText });
+    }
+
+    res.json({ message: "Home content updated successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to update home content", error });
+  }
+};
+
+// POST /upload-image
+exports.uploadImage = async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const uploadResult = await uploadToCloudinary(file.buffer, "barrister/home");
+    res.json({ url: uploadResult.secure_url });
+  } catch (error) {
+    res.status(500).json({ message: "Image upload failed", error });
+  }
+};

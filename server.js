@@ -54,51 +54,24 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Postman гэх мэт origin байхгүй нөхцөлд зөвшөөрөх
       if (!origin) return callback(null, true);
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = `CORS policy: ${origin} origin-ыг зөвшөөрөхгүй байна.`;
-        return callback(new Error(msg), false);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error(`CORS policy: ${origin} origin-ыг зөвшөөрөхгүй байна.`), false);
       }
-      return callback(null, true);
     },
     credentials: true,
   })
 );
 
-// Static файл – uploads route
-app.use(
-  "/uploads",
-  (req, res, next) => {
-    // uploads-д ирэх хүсэлтэнд зөв origin-г header-д өгнө
-    res.header("Access-Control-Allow-Origin", allowedOrigins.join(", "));
-    res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.header(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept"
-    );
-    next();
-  },
-  express.static(path.join(__dirname, "uploads"))
-);
-
-app.options("/uploads/*", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigins.join(", "));
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept"
-  );
-  res.sendStatus(200);
-});
+// ✅ Static файл – /uploads-г нийтэд нээх
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // uploads хавтас болон default зураг үүсгэх
 const ensureDefaultProfileImage = () => {
   const uploadsDir = path.join(__dirname, "uploads");
-  const defaultImageSrc = path.join(
-    __dirname,
-    "../src/assets/default-profile.png"
-  );
+  const defaultImageSrc = path.join(__dirname, "../src/assets/default-profile.png");
   const defaultImageDest = path.join(uploadsDir, "default-profile.png");
 
   if (!fs.existsSync(uploadsDir)) {
@@ -115,7 +88,7 @@ const ensureDefaultProfileImage = () => {
   }
 };
 
-// API Routes
+// ✅ API Routes
 app.use("/api/lawyers", require("./routes/lawyerRoutes"));
 app.use("/api/news", require("./routes/newsRoutes"));
 app.use("/api/testimonials", require("./routes/testimonialRoutes"));
