@@ -1,0 +1,10 @@
+node_modules/
+build/
+dist/
+uploads/
+*.log
+.env
+*.env
+.vercel/
+config/*service*.json
+*service-account*.json
