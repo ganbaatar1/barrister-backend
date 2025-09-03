@@ -109,6 +109,12 @@ app.use("/api/status", require("./routes/statusRoutes"));
 //  ← ./routes/media.js дотор upload_stream ашигладаг (өмнө явуулсан код)
 app.use("/api/media", require("./routes/media"));
 
+// ✅ Health routes (амьд байна уу гэдгийг шалгах) — 404-өөс ӨМНӨ байршина
+app.get("/", (req, res) => res.status(200).send("OK"));
+app.get("/health", (req, res) =>
+  res.status(200).json({ ok: true, uptime: process.uptime(), ts: Date.now() })
+);
+
 // 404
 app.use((req, res) => {
   res.status(404).json({ error: "Хуудас/ресурс олдсонгүй" });
