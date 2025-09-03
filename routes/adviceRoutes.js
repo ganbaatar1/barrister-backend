@@ -1,134 +1,104 @@
 const requireAuth = require("../middleware/auth");
 const express = require("express");
-const router = express.Router();
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const Advice = require("../models/Advice");
+const { uploadBufferToCloudinary } = require("../utils/cloudinary");
 
-// 🗂 Зургийн хадгалах тохиргоо
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "uploads/";
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
+const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/") && !file.mimetype.startsWith("video/")) {
-      return cb(new Error("Зөвхөн зураг болон видео оруулна уу"));
-    }
-    cb(null, true);
-  },
-});
-
-// ➕ Зөвлөгөө нэмэх
+// CREATE
 router.post("/", requireAuth, upload.single("media"), async (req, res) => {
-  console.log("req.body:", req.body);
-  console.log("req.file:", req.file);
   try {
-    const {
-      title,
-      content,
-      videoUrl,
-      seoTitle,
-      seoDescription,
-      seoKeywords,
-    } = req.body;
+    const { title, description, videoUrl, seoTitle, seoDescription, seoKeywords } = req.body;
 
-    if (!title || !content) {
-      return res.status(400).json({ error: "Гарчиг болон агуулга шаардлагатай" });
+    if (!title?.trim()) {
+      return res.status(400).json({ error: "Гарчиг шаардлагатай" });
     }
 
-    const newAdvice = new Advice({
-      title,
-      content,
-      videoUrl,
-      seoTitle,
-      seoDescription,
-      seoKeywords,
-      image: req.file ? `/uploads/${req.file.filename}` : "",
+    let imageUrl = "";
+    if (req.file?.buffer) {
+      const up = await uploadBufferToCloudinary({
+        buffer: req.file.buffer,
+        section: "advice",
+        resource_type: "auto", // image/video хоёуланг дэмжинэ
+      });
+      imageUrl = up.secure_url;
+    }
+
+    const doc = await Advice.create({
+      title: title.trim(),
+      description,
+      image: imageUrl,
+      video: videoUrl || "",
+      seo: {
+        title: seoTitle || "",
+        description: seoDescription || "",
+        keywords: (seoKeywords || "").split(",").map(s => s.trim()).filter(Boolean),
+      },
     });
 
-    const saved = await newAdvice.save();
-    res.status(201).json(saved);
+    return res.status(201).json(doc);
   } catch (err) {
-    console.error("❌ POST зөвлөгөө алдаа:", err.message);
-    res.status(400).json({ error: err.message });
+    console.error("❌ POST /api/advice алдаа:", err.message);
+    return res.status(400).json({ error: err.message });
   }
 });
 
-// 📝 Засах
-router.put("/:id", requireAuth, upload.single("media"), async (req, res) => {
-  try {
-    const {
-      title,
-      content,
-      videoUrl,
-      seoTitle,
-      seoDescription,
-      seoKeywords,
-    } = req.body;
-
-    const update = {
-      title,
-      content,
-      videoUrl,
-      seoTitle,
-      seoDescription,
-      seoKeywords,
-    };
-
-    if (req.file) {
-      update.image = `/uploads/${req.file.filename}`;
-    }
-
-    const updated = await Advice.findByIdAndUpdate(req.params.id, update, { new: true });
-    res.json(updated);
-  } catch (err) {
-    console.error("❌ PUT зөвлөгөө алдаа:", err.message);
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// 📄 Бүгдийг авах
+// LIST
 router.get("/", async (_, res) => {
   try {
     const all = await Advice.find().sort({ createdAt: -1 });
-    res.json(all);
+    return res.json(all);
   } catch (err) {
-    console.error("❌ GET зөвлөгөө алдаа:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("❌ GET /api/advice алдаа:", err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
-// 📄 ID-р авах
-router.get("/:id", async (req, res) => {
+// UPDATE
+router.put("/:id", requireAuth, upload.single("media"), async (req, res) => {
   try {
-    const advice = await Advice.findById(req.params.id);
-    if (!advice) return res.status(404).json({ error: "Олдсонгүй" });
-    res.json(advice);
+    const { title, description, videoUrl, seoTitle, seoDescription, seoKeywords } = req.body;
+
+    const update = {
+      ...(title ? { title: title.trim() } : {}),
+      ...(description ? { description } : {}),
+      ...(videoUrl ? { video: videoUrl } : {}),
+      ...(seoTitle || seoDescription || seoKeywords ? {
+        seo: {
+          ...(seoTitle ? { title: seoTitle } : {}),
+          ...(seoDescription ? { description: seoDescription } : {}),
+          ...(seoKeywords ? { keywords: seoKeywords.split(",").map(s=>s.trim()).filter(Boolean) } : {}),
+        }
+      } : {}),
+    };
+
+    if (req.file?.buffer) {
+      const up = await uploadBufferToCloudinary({
+        buffer: req.file.buffer,
+        section: "advice",
+        resource_type: "auto",
+      });
+      update.image = up.secure_url;
+    }
+
+    const saved = await Advice.findByIdAndUpdate(req.params.id, update, { new: true });
+    return res.json(saved);
   } catch (err) {
-    console.error("❌ GET зөвлөгөө ID-р алдаа:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error(`❌ PUT /api/advice/${req.params.id} алдаа:`, err.message);
+    return res.status(400).json({ error: err.message });
   }
 });
 
-// ❌ Устгах
+// DELETE
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     await Advice.findByIdAndDelete(req.params.id);
-    res.json({ message: "✅ Амжилттай устгалаа" });
+    return res.json({ message: "✅ Зөвлөгөө устгалаа" });
   } catch (err) {
-    console.error("❌ DELETE зөвлөгөө алдаа:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error(`❌ DELETE /api/advice/${req.params.id} алдаа:`, err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 

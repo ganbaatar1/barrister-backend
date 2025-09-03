@@ -1,52 +1,78 @@
 const requireAuth = require("../middleware/auth");
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const Testimonial = require("../models/Testimonial");
+const { uploadBufferToCloudinary } = require("../utils/cloudinary");
+
 const router = express.Router();
 
-// Upload config
-const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, "uploads/"),
-  filename: (_, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
-});
+// 👉 local disk биш, санах ойд хадгална
+const upload = multer({ storage: multer.memoryStorage() });
 
-const upload = multer({
-  storage,
-  fileFilter: (_, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-      return cb(new Error("Зөвхөн зураг оруулна уу"));
-    }
-    cb(null, true);
-  },
-});
-
-// ➕ POST: create testimonial
-router.post("/", requireAuth, upload.single("photo"), async (req, res) => {
+/**
+ * POST /api/testimonials
+ * body: name, message, occupation, isOrganization, organization
+ * files: photo (optional), orgLogo (optional)
+ */
+router.post("/", requireAuth, upload.fields([
+  { name: "photo", maxCount: 1 },
+  { name: "orgLogo", maxCount: 1 },
+]), async (req, res) => {
   try {
-    const { name, message, occupation } = req.body;
+    const {
+      name = "",
+      message = "",
+      occupation = "",
+      isOrganization = "false",
+      organization = "",
+    } = req.body;
 
-    if (!name || !message) {
-      return res.status(400).json({ error: "Нэр болон сэтгэгдэл заавал шаардлагатай" });
+    if (!name?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: "Нэр болон сэтгэгдэл заавал" });
     }
 
-    const testimonial = new Testimonial({
-      name,
-      message,
-      occupation,
-      photo: req.file ? `/uploads/${req.file.filename}` : "",
+    // Cloudinary upload
+    let photoUrl = "";
+    if (req.files?.photo?.[0]?.buffer) {
+      const up = await uploadBufferToCloudinary({
+        buffer: req.files.photo[0].buffer,
+        section: "testimonials",
+        resource_type: "image",
+      });
+      photoUrl = up.secure_url;
+    }
+
+    let orgLogoUrl = "";
+    const orgMode = String(isOrganization) === "true";
+    if (orgMode && req.files?.orgLogo?.[0]?.buffer) {
+      const up = await uploadBufferToCloudinary({
+        buffer: req.files.orgLogo[0].buffer,
+        section: "testimonials",
+        resource_type: "image",
+      });
+      orgLogoUrl = up.secure_url;
+    }
+
+    const doc = await Testimonial.create({
+      isOrganization: orgMode,
+      name: name.trim(),
+      organization: orgMode ? (organization || "").trim() : "",
+      message: message.trim(),
+      occupation: (occupation || "").trim(),
+      photo: photoUrl,
+      orgLogo: orgLogoUrl,
     });
 
-    const saved = await testimonial.save();
-    return res.status(201).json(saved);
+    return res.status(201).json(doc);
   } catch (err) {
     console.error("❌ POST /api/testimonials алдаа:", err.message);
     return res.status(400).json({ error: err.message });
   }
 });
 
-// 📥 GET all testimonials
+/**
+ * GET /api/testimonials
+ */
 router.get("/", async (_, res) => {
   try {
     const all = await Testimonial.find().sort({ createdAt: -1 });
@@ -57,32 +83,67 @@ router.get("/", async (_, res) => {
   }
 });
 
-// ✏️ PUT: update testimonial
-router.put("/:id", requireAuth, upload.single("photo"), async (req, res) => {
+/**
+ * PUT /api/testimonials/:id
+ * files: photo/orgLogo (optional)
+ */
+router.put("/:id", requireAuth, upload.fields([
+  { name: "photo", maxCount: 1 },
+  { name: "orgLogo", maxCount: 1 },
+]), async (req, res) => {
   try {
+    const {
+      name = "",
+      message = "",
+      occupation = "",
+      isOrganization = "false",
+      organization = "",
+    } = req.body;
+
     const update = {
-      name: req.body.name,
-      message: req.body.message,
-      occupation: req.body.occupation,
+      isOrganization: String(isOrganization) === "true",
+      name: name.trim(),
+      organization: String(isOrganization) === "true" ? (organization || "").trim() : "",
+      message: message.trim(),
+      occupation: (occupation || "").trim(),
     };
 
-    if (req.file) {
-      update.photo = `/uploads/${req.file.filename}`;
+    if (req.files?.photo?.[0]?.buffer) {
+      const up = await uploadBufferToCloudinary({
+        buffer: req.files.photo[0].buffer,
+        section: "testimonials",
+        resource_type: "image",
+      });
+      update.photo = up.secure_url;
     }
 
-    const updated = await Testimonial.findByIdAndUpdate(req.params.id, update, { new: true });
-    return res.json(updated);
+    if (update.isOrganization && req.files?.orgLogo?.[0]?.buffer) {
+      const up = await uploadBufferToCloudinary({
+        buffer: req.files.orgLogo[0].buffer,
+        section: "testimonials",
+        resource_type: "image",
+      });
+      update.orgLogo = up.secure_url;
+    } else if (!update.isOrganization) {
+      update.organization = "";
+      update.orgLogo = "";
+    }
+
+    const saved = await Testimonial.findByIdAndUpdate(req.params.id, update, { new: true });
+    return res.json(saved);
   } catch (err) {
     console.error(`❌ PUT /api/testimonials/${req.params.id} алдаа:`, err.message);
     return res.status(400).json({ error: err.message });
   }
 });
 
-// ❌ DELETE: remove testimonial
+/**
+ * DELETE /api/testimonials/:id
+ */
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     await Testimonial.findByIdAndDelete(req.params.id);
-    return res.json({ message: "✅ Сэтгэгдэл устгагдлаа" });
+    return res.json({ message: "✅ Сэтгэгдэл устгалаа" });
   } catch (err) {
     console.error(`❌ DELETE /api/testimonials/${req.params.id} алдаа:`, err.message);
     return res.status(500).json({ error: err.message });
